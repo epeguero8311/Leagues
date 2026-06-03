@@ -5,7 +5,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
-import { LeaguePage, AdminLeaguePage } from "./pages/PlaceholderPages";
+import CreateLeague from "./pages/admin/CreateLeague";
+import ManageLeague from "./pages/admin/ManageLeague";
+import { LeaguePage } from "./pages/PlaceholderPages";
 
 import "./styles/global.css";
 
@@ -14,22 +16,22 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
           <Route path="/" element={<HomePage />} />
+          {/* Support both /leagues/:id and /leagues/:id/:slug */}
           <Route path="/leagues/:id" element={<LeaguePage />} />
-
-          {/* Auth */}
+          <Route path="/leagues/:id/:slug" element={<LeaguePage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
 
-          {/* Protected admin routes */}
           <Route path="/admin/dashboard" element={
             <ProtectedRoute><AdminDashboard /></ProtectedRoute>
           } />
+          <Route path="/admin/leagues/new" element={
+            <ProtectedRoute><CreateLeague /></ProtectedRoute>
+          } />
           <Route path="/admin/leagues/:id" element={
-            <ProtectedRoute><AdminLeaguePage /></ProtectedRoute>
+            <ProtectedRoute><ManageLeague /></ProtectedRoute>
           } />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
