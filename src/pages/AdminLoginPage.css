@@ -1,0 +1,139 @@
+.login-page {
+  min-height: 100vh;
+  background: var(--c-bg);
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 16px;
+  min-height: calc(100vh - 64px);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 36px;
+}
+
+.login-header {
+  margin-bottom: 28px;
+}
+
+.login-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+  color: var(--jet);
+}
+
+.login-sub {
+  color: var(--c-text2);
+  font-size: 0.9rem;
+}
+
+.login-error {
+  background: #fff5f5;
+  border: 1.5px solid #fecaca;
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font-size: 0.875rem;
+  color: var(--c-danger);
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.btn-google {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px;
+  background: var(--white);
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius);
+  color: var(--c-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.btn-google:hover {
+  border-color: var(--slate);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.divider-with-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--c-text3);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.divider-with-text::before,
+.divider-with-text::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--c-border);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-submit {
+  width: 100%;
+  padding: 12px;
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+
+.spinner-sm-dark {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.login-switch {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--c-border);
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--c-text2);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--slate);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+.link-btn:hover { text-decoration: underline; }
+
+.login-back {
+  margin-top: 20px;
+  font-size: 0.85rem;
+  color: var(--c-text2);
+}
+.login-back a:hover { color: var(--c-text); }
