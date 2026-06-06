@@ -102,8 +102,6 @@
   color: var(--jet);
 }
 
-
-
 .lp-header-stats {
   display: flex;
   gap: 40px;
@@ -165,7 +163,7 @@
 /* ── Content ── */
 .lp-content {
   padding-top: 56px;
-  padding-bottom: 80px;
+  padding-bottom: 140px;
   flex: 1;
 }
 
@@ -358,6 +356,29 @@
 .lp-game-winner { color: var(--c-success); font-weight: 600; }
 .lp-game-draw   { color: var(--c-text3); font-weight: 500; }
 
+/* Game notes on public schedule */
+.lp-game-notes {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border-top: 1px solid var(--c-border);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.lp-game-notes-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.lp-game-notes-text {
+  font-size: 0.78rem;
+  color: var(--c-text2);
+  line-height: 1.55;
+  margin: 0;
+}
+
 /* ── Leaderboard ── */
 .lp-stat-tabs {
   display: flex;
@@ -531,7 +552,7 @@
 
 .lp-player-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
   cursor: pointer;
@@ -600,6 +621,28 @@
   font-weight: 600;
 }
 
+/* ── Mini stat pills (visible on closed card) ── */
+.lp-player-mini-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.lp-mini-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.lp-mini-val   { font-weight: 700; font-size: 0.78rem; }
+.lp-mini-label { color: var(--c-text3); font-weight: 500; }
+
 .lp-expand-btn {
   background: none;
   border: none;
@@ -609,16 +652,18 @@
   padding: 4px;
   flex-shrink: 0;
   transition: color var(--transition);
+  margin-top: 2px;
 }
 .lp-player-card:hover .lp-expand-btn { color: var(--c-text2); }
 
+/* ── Expanded detail ── */
 .lp-player-detail {
   border-top: 1px solid var(--c-border);
   padding: 16px 18px;
   background: var(--c-bg);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .lp-player-bio {
@@ -628,31 +673,82 @@
 }
 
 .lp-player-stats-title {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--c-text3);
   margin-bottom: 10px;
 }
 
+/* Full stats grid */
 .lp-player-stats-grid {
   display: flex;
-  gap: 16px;
+  gap: 0;
   flex-wrap: wrap;
+  background: var(--white);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .lp-player-stat-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 52px;
+  gap: 3px;
+  padding: 12px 16px;
+  border-right: 1px solid var(--c-border);
+  flex: 1;
+  min-width: 64px;
+}
+.lp-player-stat-item:last-child { border-right: none; }
+
+.lp-player-stat-val   { font-size: 1.35rem; font-weight: 700; line-height: 1; }
+.lp-player-stat-label {
+  font-size: 0.65rem;
+  color: var(--c-text3);
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.lp-player-stat-val   { font-size: 1.3rem; font-weight: 700; line-height: 1; }
-.lp-player-stat-label { font-size: 0.68rem; color: var(--c-text3); font-weight: 500; text-align: center; }
-.lp-player-no-data    { font-size: 0.85rem; color: var(--c-text3); }
+/* ── Notes section ── */
+.lp-player-notes { display: flex; flex-direction: column; }
+
+.lp-notes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--white);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.lp-note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.845rem;
+  color: var(--c-text);
+  line-height: 1.5;
+}
+
+.lp-note-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-text3);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.lp-note-text { flex: 1; }
+
+.lp-player-no-data { font-size: 0.85rem; color: var(--c-text3); }
 
 /* ── Empty ── */
 .lp-empty {
@@ -692,4 +788,49 @@
   .lp-games-grid   { grid-template-columns: 1fr; }
   .lp-players-grid { grid-template-columns: 1fr; }
   .lp-footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  .lp-player-stat-item { padding: 10px 12px; }
 }
+
+/* ── Player search bar (public) ── */
+.lp-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.lp-search-icon {
+  position: absolute;
+  left: 13px;
+  font-size: 0.85rem;
+  pointer-events: none;
+  opacity: 0.45;
+}
+.lp-search-bar {
+  width: 100%;
+  padding: 10px 36px 10px 38px;
+  border: 1.5px solid var(--c-border2);
+  border-radius: var(--radius);
+  background: var(--white);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  color: var(--c-text);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.lp-search-bar::placeholder { color: var(--c-text3); }
+.lp-search-bar:focus {
+  outline: none;
+  border-color: var(--slate);
+  box-shadow: 0 0 0 3px rgba(100,116,139,0.1);
+}
+.lp-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--c-text3);
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color var(--transition);
+}
+.lp-search-clear:hover { color: var(--c-text); }

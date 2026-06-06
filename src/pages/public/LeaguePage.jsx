@@ -67,7 +67,7 @@ export default function LeaguePage() {
       <div className="lp-header" style={{ borderTop: `4px solid ${accentColor}` }}>
         <div className="container">
 
-          {/* Top row — logo, name, stats, expand toggle */}
+          {/* Top row */}
           <div className="lp-header-top">
             <div className="lp-logo" style={{ background: accentColor + "18", border: `2px solid ${accentColor}33` }}>
               {league.logoUrl
@@ -121,7 +121,6 @@ export default function LeaguePage() {
               {league.description && <p className="lp-desc-text">{league.description}</p>}
             </div>
           )}
-
         </div>
       </div>
 
@@ -167,7 +166,6 @@ export default function LeaguePage() {
 function StandingsTab({ teams, games, accentColor }) {
   const completed = games.filter(g => g.status === "completed");
 
-  // Build standings
   const standings = teams.map(team => {
     const teamGames = completed.filter(g => g.homeTeamId === team.id || g.awayTeamId === team.id);
     let W = 0, L = 0, D = 0, GF = 0, GA = 0;
@@ -254,9 +252,21 @@ function StandingsTab({ teams, games, accentColor }) {
    SCHEDULE TAB
 ═══════════════════════════════════════ */
 function ScheduleTab({ teams, games }) {
+  const [search, setSearch] = useState("");
   const getTeam = tid => teams.find(t => t.id === tid);
-  const upcoming  = games.filter(g => g.status !== "completed");
-  const completed = games.filter(g => g.status === "completed").reverse();
+
+  const filterGames = (list) => {
+    if (!search.trim()) return list;
+    const q = search.toLowerCase();
+    return list.filter(g => {
+      const home = getTeam(g.homeTeamId)?.name || "";
+      const away = getTeam(g.awayTeamId)?.name || "";
+      return home.toLowerCase().includes(q) || away.toLowerCase().includes(q) || (g.location || "").toLowerCase().includes(q);
+    });
+  };
+
+  const upcoming  = filterGames(games.filter(g => g.status !== "completed"));
+  const completed = filterGames(games.filter(g => g.status === "completed").reverse());
 
   if (games.length === 0) return <EmptyState message="No games have been scheduled yet." />;
 
@@ -294,11 +304,20 @@ function ScheduleTab({ teams, games }) {
         {game.status === "completed" && (() => {
           const hS = game.homeScore, aS = game.awayScore;
           const winner = hS > aS ? home : aS > hS ? away : null;
-          return winner
-            ? <div className="lp-game-result">
-                <span className="lp-game-winner">{winner.name} won</span>
-              </div>
-            : <div className="lp-game-result"><span className="lp-game-draw">Draw</span></div>;
+          return (
+            <>
+              {winner
+                ? <div className="lp-game-result"><span className="lp-game-winner">{winner.name} won</span></div>
+                : <div className="lp-game-result"><span className="lp-game-draw">Draw</span></div>
+              }
+              {game.gameNotes && (
+                <div className="lp-game-notes">
+                  <span className="lp-game-notes-icon">📋</span>
+                  <p className="lp-game-notes-text">{game.gameNotes}</p>
+                </div>
+              )}
+            </>
+          );
         })()}
       </div>
     );
@@ -306,6 +325,19 @@ function ScheduleTab({ teams, games }) {
 
   return (
     <div className="lp-section lp-schedule">
+      <div className="lp-search-wrap">
+        <span className="lp-search-icon">🔍</span>
+        <input
+          className="lp-search-bar"
+          placeholder="Search by team or location..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>✕</button>}
+      </div>
+      {search && upcoming.length === 0 && completed.length === 0 && (
+        <p style={{ color: "var(--c-text3)", fontSize: "0.875rem" }}>No games match "{search}".</p>
+      )}
       {upcoming.length > 0 && (
         <div className="lp-schedule-group">
           <p className="lp-schedule-label">Upcoming</p>
@@ -336,7 +368,6 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
   if (statCategories.length === 0) return <EmptyState message="No stat categories have been set up for this league yet." />;
   if (players.length === 0) return <EmptyState message="No players have been added yet." />;
 
-  // Aggregate stats from all completed games
   const statTotals = {};
   games.filter(g => g.status === "completed" && g.playerStats).forEach(game => {
     Object.entries(game.playerStats).forEach(([pid, stats]) => {
@@ -356,7 +387,6 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
 
   return (
     <div className="lp-section">
-      {/* Stat selector */}
       <div className="lp-stat-tabs">
         {statCategories.map(s => (
           <button
@@ -423,13 +453,11 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
 function PlayersTab({ players, teams, games, league, accentColor }) {
   const [filter, setFilter]     = useState("all");
   const [expanded, setExpanded] = useState(null);
+  const [search, setSearch]     = useState("");
 
-  const getTeam   = tid => teams.find(t => t.id === tid);
-  const filtered  = filter === "all" ? players : players.filter(p => p.teamId === filter);
+  const getTeam  = tid => teams.find(t => t.id === tid);
 
-  if (players.length === 0) return <EmptyState message="No players have been added yet." />;
-
-  // Aggregate stats per player
+  // Aggregate stats per player from completed games
   const statTotals = {};
   games.filter(g => g.status === "completed" && g.playerStats).forEach(game => {
     Object.entries(game.playerStats).forEach(([pid, stats]) => {
@@ -442,12 +470,27 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
 
   const statCategories = league.statCategories || [];
 
+  const filtered = (filter === "all" ? players : players.filter(p => p.teamId === filter))
+    .filter(p => {
+      const q = search.toLowerCase();
+      return !q || `${p.firstName} ${p.lastName}`.toLowerCase().includes(q)
+        || (p.position || "").toLowerCase().includes(q)
+        || (p.jerseyNumber || "").includes(q)
+        || (getTeam(p.teamId)?.name || "").toLowerCase().includes(q);
+    });
+
+  if (players.length === 0) return <EmptyState message="No players have been added yet." />;
+
   return (
     <div className="lp-section">
       {/* Team filter */}
       {teams.length > 1 && (
         <div className="lp-filter-row">
-          <button className={`lp-filter-btn ${filter === "all" ? "active" : ""}`} style={filter === "all" ? { background: accentColor, borderColor: accentColor, color: "#fff" } : {}} onClick={() => setFilter("all")}>
+          <button
+            className={`lp-filter-btn ${filter === "all" ? "active" : ""}`}
+            style={filter === "all" ? { background: accentColor, borderColor: accentColor, color: "#fff" } : {}}
+            onClick={() => setFilter("all")}
+          >
             All Teams
           </button>
           {teams.map(t => (
@@ -464,15 +507,31 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
         </div>
       )}
 
+      <div className="lp-search-wrap">
+        <span className="lp-search-icon">🔍</span>
+        <input
+          className="lp-search-bar"
+          placeholder="Search players by name, team, or position..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>✕</button>}
+      </div>
+
       <div className="lp-players-grid">
+        {filtered.length === 0 && search && (
+          <p style={{ color: "var(--c-text3)", fontSize: "0.875rem", gridColumn: "1/-1" }}>No players match "{search}".</p>
+        )}
         {filtered.map(player => {
-          const team    = getTeam(player.teamId);
-          const isOpen  = expanded === player.id;
-          const stats   = statTotals[player.id] || {};
-          const hasStats = statCategories.some(s => stats[s.key] > 0);
+          const team   = getTeam(player.teamId);
+          const isOpen = expanded === player.id;
+          const stats  = statTotals[player.id] || {};
+          const hasStats = statCategories.some(s => (stats[s.key] || 0) > 0);
+          const notes  = player.notes || [];
 
           return (
             <div key={player.id} className={`lp-player-card ${isOpen ? "open" : ""}`}>
+              {/* Card header — always visible */}
               <div className="lp-player-card-top" onClick={() => setExpanded(isOpen ? null : player.id)}>
                 <div className="lp-player-avatar">
                   {player.photoUrl
@@ -489,26 +548,34 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
                         {team.name}
                       </span>
                     )}
-                    {player.position && <span className="lp-player-pos">{player.position}</span>}
+                    {player.position  && <span className="lp-player-pos">{player.position}</span>}
                     {player.jerseyNumber && <span className="lp-player-jersey">#{player.jerseyNumber}</span>}
                   </div>
+
+
                 </div>
                 <button className="lp-expand-btn" aria-label={isOpen ? "Collapse" : "Expand"}>
                   {isOpen ? "▲" : "▼"}
                 </button>
               </div>
 
+              {/* Expanded detail */}
               {isOpen && (
                 <div className="lp-player-detail">
+
+                  {/* Bio */}
                   {player.bio && <p className="lp-player-bio">{player.bio}</p>}
 
+                  {/* Season Stats */}
                   {hasStats && (
                     <div className="lp-player-stats">
                       <p className="lp-player-stats-title">Season Stats</p>
                       <div className="lp-player-stats-grid">
-                        {statCategories.filter(s => stats[s.key] > 0).map(s => (
+                        {statCategories.map(s => (
                           <div key={s.key} className="lp-player-stat-item">
-                            <span className="lp-player-stat-val" style={{ color: accentColor }}>{stats[s.key]}</span>
+                            <span className="lp-player-stat-val" style={{ color: accentColor }}>
+                              {stats[s.key] || 0}
+                            </span>
                             <span className="lp-player-stat-label">{s.label}</span>
                           </div>
                         ))}
@@ -516,7 +583,22 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
                     </div>
                   )}
 
-                  {!player.bio && !hasStats && (
+                  {/* Notes */}
+                  {notes.length > 0 && (
+                    <div className="lp-player-notes">
+                      <p className="lp-player-stats-title">Notes</p>
+                      <ul className="lp-notes-list">
+                        {notes.map((note, i) => (
+                          <li key={i} className="lp-note-item">
+                            <span className="lp-note-bullet" />
+                            <span className="lp-note-text">{note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {!player.bio && !hasStats && notes.length === 0 && (
                     <p className="lp-player-no-data">No additional info available.</p>
                   )}
                 </div>

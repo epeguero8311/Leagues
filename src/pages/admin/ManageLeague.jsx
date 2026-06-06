@@ -24,6 +24,12 @@ export default function ManageLeague() {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]         = useState("Teams");
+  const [toast, setToast]     = useState(null); // { msg, type: "error"|"success" }
+
+  const showToast = (msg, type = "error") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => { fetchAll(); }, [id]);
 
@@ -90,11 +96,18 @@ export default function ManageLeague() {
         </div>
 
         <div className="manage-content">
-          {tab === "Teams"    && <TeamsTab    league={league} teams={teams} setTeams={setTeams} players={players} leagueId={id} />}
-          {tab === "Players"  && <PlayersTab  league={league} players={players} setPlayers={setPlayers} teams={teams} leagueId={id} />}
-          {tab === "Schedule" && <ScheduleTab league={league} teams={teams} leagueId={id} />}
-          {tab === "Settings" && <SettingsTab league={league} setLeague={setLeague} leagueId={id} navigate={navigate} publicUrl={publicUrl} />}
+          {tab === "Teams"    && <TeamsTab    league={league} teams={teams} setTeams={setTeams} players={players} leagueId={id} showToast={showToast} />}
+          {tab === "Players"  && <PlayersTab  league={league} players={players} setPlayers={setPlayers} teams={teams} leagueId={id} showToast={showToast} />}
+          {tab === "Schedule" && <ScheduleTab league={league} teams={teams} leagueId={id} showToast={showToast} />}
+          {tab === "Settings" && <SettingsTab league={league} setLeague={setLeague} leagueId={id} navigate={navigate} publicUrl={publicUrl} showToast={showToast} />}
         </div>
+
+        {/* Toast notifications */}
+        {toast && (
+          <div className={`toast-banner ${toast.type}`}>
+            {toast.type === "error" ? "⚠️" : "✓"} {toast.msg}
+          </div>
+        )}
 
       </div>
     </div>
@@ -104,12 +117,13 @@ export default function ManageLeague() {
 /* ═══════════════════════════════════════
    TEAMS TAB
 ═══════════════════════════════════════ */
-function TeamsTab({ teams, setTeams, players, leagueId }) {
+function TeamsTab({ teams, setTeams, players, leagueId, showToast }) {
   const [showForm, setShowForm] = useState(false);
   const [editTeam, setEditTeam] = useState(null);
   const [name, setName]         = useState("");
   const [color, setColor]       = useState("#607D8B");
   const [saving, setSaving]     = useState(false);
+  const [search, setSearch]     = useState("");
 
   const openAdd  = () => { setEditTeam(null); setName(""); setColor("#607D8B"); setShowForm(true); };
   const openEdit = (t) => { setEditTeam(t); setName(t.name); setColor(t.color); setShowForm(true); };
@@ -127,14 +141,16 @@ function TeamsTab({ teams, setTeams, players, leagueId }) {
         setTeams(prev => [...prev, { id: docRef.id, name: name.trim(), color }]);
       }
       closeForm();
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast("Failed to save team. Please try again."); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (teamId) => {
     if (!confirm("Delete this team? Players assigned to it will remain.")) return;
-    await deleteDoc(doc(db, "leagues", leagueId, "teams", teamId));
-    setTeams(prev => prev.filter(t => t.id !== teamId));
+    try {
+      await deleteDoc(doc(db, "leagues", leagueId, "teams", teamId));
+      setTeams(prev => prev.filter(t => t.id !== teamId));
+    } catch (err) { console.error(err); showToast("Failed to delete team."); }
   };
 
   return (
@@ -142,6 +158,17 @@ function TeamsTab({ teams, setTeams, players, leagueId }) {
       <div className="tab-toolbar">
         <h3 className="tab-section-title">Teams <span className="count-badge">{teams.length}</span></h3>
         <button className="btn btn-primary" onClick={openAdd}>+ Add Team</button>
+      </div>
+
+      <div className="search-bar-wrap">
+        <span className="search-icon">🔍</span>
+        <input
+          className="search-bar"
+          placeholder="Search teams..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && <button className="search-clear" onClick={() => setSearch("")}>✕</button>}
       </div>
 
       {showForm && (
@@ -173,7 +200,7 @@ function TeamsTab({ teams, setTeams, players, leagueId }) {
         <div className="empty-state"><p className="empty-title">No teams yet</p><p className="empty-sub">Add your first team to get started.</p></div>
       ) : (
         <div className="teams-list">
-          {teams.map(team => {
+          {teams.filter(t => t.name.toLowerCase().includes(search.toLowerCase())).map(team => {
             const teamPlayers = players.filter(p => p.teamId === team.id);
             return (
               <div key={team.id} className="team-row">
@@ -200,24 +227,55 @@ function TeamsTab({ teams, setTeams, players, leagueId }) {
 /* ═══════════════════════════════════════
    PLAYERS TAB
 ═══════════════════════════════════════ */
-function PlayersTab({ players, setPlayers, teams, leagueId }) {
+function PlayersTab({ players, setPlayers, teams, leagueId, showToast }) {
   const [showForm, setShowForm]     = useState(false);
   const [editPlayer, setEditPlayer] = useState(null);
   const [saving, setSaving]         = useState(false);
   const [filter, setFilter]         = useState("all");
-  const [form, setForm] = useState({ firstName: "", lastName: "", teamId: "", jerseyNumber: "", position: "", bio: "", photoFile: null, photoPreview: null });
+  const [search, setSearch]         = useState("");
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", teamId: "", jerseyNumber: "",
+    position: "", bio: "", photoFile: null, photoPreview: null, notes: []
+  });
+  const [newNote, setNewNote] = useState("");
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const openAdd  = () => { setEditPlayer(null); setForm({ firstName: "", lastName: "", teamId: "", jerseyNumber: "", position: "", bio: "", photoFile: null, photoPreview: null }); setShowForm(true); };
-  const openEdit = (p) => { setEditPlayer(p); setForm({ firstName: p.firstName, lastName: p.lastName, teamId: p.teamId || "", jerseyNumber: p.jerseyNumber || "", position: p.position || "", bio: p.bio || "", photoFile: null, photoPreview: p.photoUrl || null }); setShowForm(true); };
-  const closeForm = () => { setShowForm(false); setEditPlayer(null); };
+  const openAdd  = () => {
+    setEditPlayer(null);
+    setForm({ firstName: "", lastName: "", teamId: "", jerseyNumber: "", position: "", bio: "", photoFile: null, photoPreview: null, notes: [] });
+    setNewNote("");
+    setShowForm(true);
+  };
+  const openEdit = (p) => {
+    setEditPlayer(p);
+    setForm({
+      firstName: p.firstName, lastName: p.lastName, teamId: p.teamId || "",
+      jerseyNumber: p.jerseyNumber || "", position: p.position || "",
+      bio: p.bio || "", photoFile: null, photoPreview: p.photoUrl || null,
+      notes: p.notes || []
+    });
+    setNewNote("");
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditPlayer(null); setNewNote(""); };
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setF("photoFile", file);
     setF("photoPreview", URL.createObjectURL(file));
+  };
+
+  const addNote = () => {
+    const trimmed = newNote.trim();
+    if (!trimmed) return;
+    setF("notes", [...form.notes, trimmed]);
+    setNewNote("");
+  };
+
+  const removeNote = (idx) => {
+    setF("notes", form.notes.filter((_, i) => i !== idx));
   };
 
   const handleSave = async () => {
@@ -232,7 +290,16 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
           photoUrl = await getDownloadURL(photoRef);
         } catch (e) { console.warn("Photo upload failed:", e.message); }
       }
-      const data = { firstName: form.firstName.trim(), lastName: form.lastName.trim(), teamId: form.teamId || null, jerseyNumber: form.jerseyNumber.trim(), position: form.position.trim(), bio: form.bio.trim(), photoUrl };
+      const data = {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        teamId: form.teamId || null,
+        jerseyNumber: form.jerseyNumber.trim(),
+        position: form.position.trim(),
+        bio: form.bio.trim(),
+        notes: form.notes,
+        photoUrl
+      };
       if (editPlayer) {
         await updateDoc(doc(db, "leagues", leagueId, "players", editPlayer.id), data);
         setPlayers(prev => prev.map(p => p.id === editPlayer.id ? { ...p, ...data } : p));
@@ -241,17 +308,25 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
         setPlayers(prev => [...prev, { id: docRef.id, ...data }]);
       }
       closeForm();
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast("Failed to save player. Please try again."); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (playerId) => {
     if (!confirm("Remove this player?")) return;
-    await deleteDoc(doc(db, "leagues", leagueId, "players", playerId));
-    setPlayers(prev => prev.filter(p => p.id !== playerId));
+    try {
+      await deleteDoc(doc(db, "leagues", leagueId, "players", playerId));
+      setPlayers(prev => prev.filter(p => p.id !== playerId));
+    } catch (err) { console.error(err); showToast("Failed to remove player."); }
   };
 
-  const filtered = filter === "all" ? players : players.filter(p => p.teamId === filter);
+  const filtered = (filter === "all" ? players : players.filter(p => p.teamId === filter))
+    .filter(p => {
+      const q = search.toLowerCase();
+      return !q || `${p.firstName} ${p.lastName}`.toLowerCase().includes(q)
+        || (p.position || "").toLowerCase().includes(q)
+        || (p.jerseyNumber || "").includes(q);
+    });
   const getTeam  = (teamId) => teams.find(t => t.id === teamId);
 
   return (
@@ -271,6 +346,17 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
           ))}
         </div>
       )}
+
+      <div className="search-bar-wrap">
+        <span className="search-icon">🔍</span>
+        <input
+          className="search-bar"
+          placeholder="Search by name, position, or jersey #..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && <button className="search-clear" onClick={() => setSearch("")}>✕</button>}
+      </div>
 
       {showForm && (
         <div className="inline-form card player-form">
@@ -301,7 +387,7 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}>
               <label className="form-label">Bio <span className="opt">Optional</span></label>
-              <textarea className="form-input form-textarea" rows={2} placeholder="Short bio or notes..." value={form.bio} onChange={e => setF("bio", e.target.value)} />
+              <textarea className="form-input form-textarea" rows={2} placeholder="Short bio..." value={form.bio} onChange={e => setF("bio", e.target.value)} />
             </div>
             <div className="form-group" style={{ gridColumn: "1 / -1" }}>
               <label className="form-label">Photo <span className="opt">Optional</span></label>
@@ -317,7 +403,56 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
                 </label>
               )}
             </div>
+
+            {/* ── Notes ── */}
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+              <label className="form-label">
+                Notes <span className="opt">Optional</span>
+                <span className="form-label-hint"> — e.g. "May 3 — rest 1 game (4 yellows)"</span>
+              </label>
+
+              {/* Existing notes */}
+              {form.notes.length > 0 && (
+                <div className="notes-list-admin">
+                  {form.notes.map((note, idx) => (
+                    <div key={idx} className="note-admin-row">
+                      <span className="note-admin-bullet" />
+                      <span className="note-admin-text">{note}</span>
+                      <button
+                        className="note-remove-btn"
+                        type="button"
+                        onClick={() => removeNote(idx)}
+                        title="Remove note"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new note */}
+              <div className="note-add-row">
+                <input
+                  className="form-input"
+                  placeholder='e.g. May 3 — rest 1 game (4 yellows)'
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addNote(); } }}
+                />
+                <button
+                  className="btn btn-secondary note-add-btn"
+                  type="button"
+                  onClick={addNote}
+                  disabled={!newNote.trim()}
+                >
+                  Add
+                </button>
+              </div>
+              <p className="form-hint">Press Enter or click Add to add a note. Each note is a separate line.</p>
+            </div>
           </div>
+
           <div className="inline-form-actions">
             <button className="btn btn-secondary" onClick={closeForm}>Cancel</button>
             <button className="btn btn-primary" onClick={handleSave} disabled={saving || !form.firstName.trim() || !form.lastName.trim()}>
@@ -333,7 +468,7 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
         <div className="players-table-wrap">
           <table className="players-table">
             <thead>
-              <tr><th>Player</th><th>Team</th><th>Position</th><th>#</th><th></th></tr>
+              <tr><th>Player</th><th>Team</th><th>Position</th><th>#</th><th>Notes</th><th></th></tr>
             </thead>
             <tbody>
               {filtered.map(p => {
@@ -359,6 +494,12 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
                     <td className="text-muted">{p.position || "—"}</td>
                     <td className="text-muted">{p.jerseyNumber || "—"}</td>
                     <td>
+                      {p.notes?.length > 0
+                        ? <span className="notes-count-badge">{p.notes.length} note{p.notes.length !== 1 ? "s" : ""}</span>
+                        : <span className="text-muted">—</span>
+                      }
+                    </td>
+                    <td>
                       <div className="row-actions">
                         <button className="text-btn" onClick={() => openEdit(p)}>Edit</button>
                         <button className="text-btn danger" onClick={() => handleDelete(p.id)}>Delete</button>
@@ -378,13 +519,14 @@ function PlayersTab({ players, setPlayers, teams, leagueId }) {
 /* ═══════════════════════════════════════
    SCHEDULE TAB
 ═══════════════════════════════════════ */
-function ScheduleTab({ league, teams, leagueId }) {
+function ScheduleTab({ league, teams, leagueId, showToast }) {
   const [games, setGames]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [showForm, setShowForm]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [editGame, setEditGame]   = useState(null);
-  const [scoreGameId, setScoreGameId] = useState(null); // which game has score form open
+  const [scoreGameId, setScoreGameId] = useState(null);
+  const [search, setSearch]           = useState("");
   const [form, setForm] = useState({ homeTeamId: "", awayTeamId: "", date: "", time: "", location: "" });
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -415,27 +557,43 @@ function ScheduleTab({ league, teams, leagueId }) {
         setGames(prev => [...prev, { id: docRef.id, ...form, homeScore: null, awayScore: null, status: "upcoming" }].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)));
       }
       setShowForm(false); setEditGame(null);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast("Failed to save game. Please try again."); }
     finally { setSaving(false); }
   };
 
   const handleDeleteGame = async (gameId) => {
     if (!confirm("Delete this game?")) return;
-    await deleteDoc(doc(db, "leagues", leagueId, "games", gameId));
-    setGames(prev => prev.filter(g => g.id !== gameId));
-    if (scoreGameId === gameId) setScoreGameId(null);
+    try {
+      await deleteDoc(doc(db, "leagues", leagueId, "games", gameId));
+      setGames(prev => prev.filter(g => g.id !== gameId));
+      if (scoreGameId === gameId) setScoreGameId(null);
+    } catch (err) { console.error(err); showToast("Failed to delete game."); }
   };
 
-  const handleSaveScore = async (gameId, homeScore, awayScore, playerStats) => {
-    const updateData = { homeScore, awayScore, status: "completed", ...(playerStats ? { playerStats } : {}) };
-    await updateDoc(doc(db, "leagues", leagueId, "games", gameId), updateData);
-    setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updateData } : g));
-    setScoreGameId(null);
+  const handleSaveScore = async (gameId, homeScore, awayScore, playerStats, gameNotes) => {
+    try {
+      const updateData = { homeScore, awayScore, status: "completed", gameNotes: gameNotes || "", ...(playerStats ? { playerStats } : {}) };
+      await updateDoc(doc(db, "leagues", leagueId, "games", gameId), updateData);
+      setGames(prev => prev.map(g => g.id === gameId ? { ...g, ...updateData } : g));
+      setScoreGameId(null);
+      showToast("Score saved!", "success");
+    } catch (err) { console.error(err); showToast("Failed to save score. Please try again."); }
   };
 
   const getTeam = (tid) => teams.find(t => t.id === tid);
-  const upcoming  = games.filter(g => g.status !== "completed");
-  const completed = games.filter(g => g.status === "completed");
+
+  const filterGames = (list) => {
+    if (!search.trim()) return list;
+    const q = search.toLowerCase();
+    return list.filter(g => {
+      const home = getTeam(g.homeTeamId)?.name || "";
+      const away = getTeam(g.awayTeamId)?.name || "";
+      return home.toLowerCase().includes(q) || away.toLowerCase().includes(q) || (g.location || "").toLowerCase().includes(q) || (g.date || "").includes(q);
+    });
+  };
+
+  const upcoming  = filterGames(games.filter(g => g.status !== "completed"));
+  const completed = filterGames(games.filter(g => g.status === "completed"));
 
   return (
     <div className="tab-body">
@@ -444,7 +602,17 @@ function ScheduleTab({ league, teams, leagueId }) {
         <button className="btn btn-primary" onClick={openAdd}>+ Add Game</button>
       </div>
 
-      {/* Add / Edit game form */}
+      <div className="search-bar-wrap">
+        <span className="search-icon">🔍</span>
+        <input
+          className="search-bar"
+          placeholder="Search by team, location, or date..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && <button className="search-clear" onClick={() => setSearch("")}>✕</button>}
+      </div>
+
       {showForm && (
         <div className="inline-form card">
           <h4 className="inline-form-title">{editGame ? "Edit Game" : "New Game"}</h4>
@@ -549,16 +717,30 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
   const [homeScore, setHomeScore]     = useState(game.homeScore != null ? String(game.homeScore) : "");
   const [awayScore, setAwayScore]     = useState(game.awayScore != null ? String(game.awayScore) : "");
   const [playerStats, setPlayerStats] = useState(game.playerStats || {});
+  const [gameNotes, setGameNotes]     = useState(game.gameNotes || "");
   const [homePlayers, setHomePlayers] = useState([]);
   const [awayPlayers, setAwayPlayers] = useState([]);
   const [loadedPlayers, setLoadedPlayers] = useState(false);
   const [saving, setSaving]           = useState(false);
   const [attempted, setAttempted]     = useState(false);
 
+  useEffect(() => {
+    if (!isScoreOpen) setAttempted(false);
+  }, [isScoreOpen]);
+
+  // Sync form state when game data changes (e.g. after a save)
+  useEffect(() => {
+    setHomeScore(game.homeScore != null ? String(game.homeScore) : "");
+    setAwayScore(game.awayScore != null ? String(game.awayScore) : "");
+    setPlayerStats(game.playerStats || {});
+    setGameNotes(game.gameNotes || "");
+  }, [game.id, game.homeScore, game.awayScore, game.gameNotes]);
+
   const statCategories = league.statCategories || [];
 
   useEffect(() => {
-    if (!isScoreOpen || loadedPlayers) return;
+    if (!isScoreOpen) return;
+    // Always reload players when the panel opens so roster changes are reflected
     getDocs(collection(db, "leagues", leagueId, "players")).then(snap => {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setHomePlayers(all.filter(p => p.teamId === game.homeTeamId));
@@ -578,15 +760,20 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
 
   const handleSave = async () => {
     setAttempted(true);
-    if (!homeScore || !awayScore) return;
+    if (homeScore === "" || awayScore === "") return;
     setSaving(true);
-    const clean = {};
-    Object.entries(playerStats).forEach(([pid, stats]) => {
-      const c = {};
-      Object.entries(stats).forEach(([k, v]) => { if (v !== "" && !isNaN(Number(v))) c[k] = Number(v); });
-      if (Object.keys(c).length) clean[pid] = c;
-    });
-    await onSaveScore(game.id, Number(homeScore), Number(awayScore), clean);
+    try {
+      const clean = {};
+      Object.entries(playerStats).forEach(([pid, stats]) => {
+        const c = {};
+        Object.entries(stats).forEach(([k, v]) => { if (v !== "" && !isNaN(Number(v))) c[k] = Number(v); });
+        if (Object.keys(c).length) clean[pid] = c;
+      });
+      await onSaveScore(game.id, Number(homeScore), Number(awayScore), clean, gameNotes.trim());
+    } catch (err) {
+      console.error(err);
+      setSaving(false);
+    }
     setSaving(false);
   };
 
@@ -594,7 +781,6 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
 
   return (
     <div className={`game-entry ${game.status === "completed" ? "completed" : ""}`}>
-      {/* Game row */}
       <div className="game-row">
         <div className="game-teams">
           <span className="game-team-name">{home?.name || "TBD"}</span>
@@ -618,14 +804,12 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
         </div>
       </div>
 
-      {/* Inline score + stats form */}
       {isScoreOpen && (
         <div className="score-inline-form">
           <div className="score-inline-header">
             <h4 className="score-inline-title">Score & Stats</h4>
           </div>
 
-          {/* Score inputs */}
           <div className="score-inline-scores">
             <div className="score-inline-block">
               <label className="form-label">{home?.name}</label>
@@ -653,11 +837,9 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
             <p className="score-error-msg">Both scores are required before saving.</p>
           )}
 
-          {/* Player stats per team */}
           {statCategories.length > 0 && (
             <div className="score-inline-stats">
               <p className="score-inline-stats-label">Player Stats <span className="opt">Optional</span></p>
-
               {!loadedPlayers ? (
                 <div className="score-inline-loading"><div className="spinner" /></div>
               ) : (
@@ -708,7 +890,20 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
             </div>
           )}
 
-          {/* Actions */}
+          {/* Game Notes */}
+          <div className="score-inline-game-notes">
+            <label className="score-inline-stats-label">
+              Game Notes <span className="opt">Optional</span>
+            </label>
+            <textarea
+              className="form-input score-game-notes-input"
+              rows={3}
+              placeholder="e.g. Great match, came back from 2–0 down. Ramirez had a hat-trick. Ref gave 3 yellows in the 2nd half..."
+              value={gameNotes}
+              onChange={e => setGameNotes(e.target.value)}
+            />
+          </div>
+
           <div className="score-inline-actions">
             <button className="btn btn-secondary" onClick={onToggleScore}>Cancel</button>
             <button className="btn btn-primary" onClick={handleSave} disabled={!canSave || saving}>
@@ -722,15 +917,14 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
 }
 
 /* ═══════════════════════════════════════
-   SETTINGS TAB — with stat category mgmt
+   SETTINGS TAB
 ═══════════════════════════════════════ */
-function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
-  const [form, setForm]     = useState({ name: league.name, description: league.description || "", city: league.city || "" });
+function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl, showToast }) {
+  const [form, setForm]     = useState({ name: league.name, description: league.description || "", city: league.city || "", color: league.color || "#607D8B" });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Stat categories state
   const [stats, setStats]         = useState(league.statCategories || []);
   const [savingStats, setSavingStats] = useState(false);
   const [savedStats, setSavedStats]   = useState(false);
@@ -738,13 +932,15 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
+    if (!form.name.trim()) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "leagues", leagueId), { name: form.name.trim(), description: form.description.trim(), city: form.city.trim() });
-      setLeague(l => ({ ...l, ...form }));
+      const updated = { name: form.name.trim(), description: form.description.trim(), city: form.city.trim(), color: form.color };
+      await updateDoc(doc(db, "leagues", leagueId), updated);
+      setLeague(l => ({ ...l, ...updated }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast("Failed to save league info."); }
     finally { setSaving(false); }
   };
 
@@ -753,13 +949,32 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
   const handleDelete = async () => {
     if (!confirm("Permanently delete this league and all its data? This cannot be undone.")) return;
     if (!confirm("Are you sure? All teams, players, and games will be deleted.")) return;
-    await deleteDoc(doc(db, "leagues", leagueId));
-    navigate("/admin/dashboard");
+    try {
+      // Delete all subcollections first
+      const [teamsSnap, playersSnap, gamesSnap] = await Promise.all([
+        getDocs(collection(db, "leagues", leagueId, "teams")),
+        getDocs(collection(db, "leagues", leagueId, "players")),
+        getDocs(collection(db, "leagues", leagueId, "games")),
+      ]);
+      await Promise.all([
+        ...teamsSnap.docs.map(d => deleteDoc(d.ref)),
+        ...playersSnap.docs.map(d => deleteDoc(d.ref)),
+        ...gamesSnap.docs.map(d => deleteDoc(d.ref)),
+      ]);
+      await deleteDoc(doc(db, "leagues", leagueId));
+      navigate("/admin/dashboard");
+    } catch (err) { console.error(err); showToast("Failed to delete league. Please try again."); }
   };
 
   const addStat = () => setStats(prev => [...prev, { key: `stat_${Date.now()}`, label: "", type: "number" }]);
   const removeStat = (idx) => setStats(prev => prev.filter((_, i) => i !== idx));
-  const updateStatLabel = (idx, label) => setStats(prev => prev.map((s, i) => i === idx ? { ...s, label, key: label.toLowerCase().replace(/\s+/g, "_") || s.key } : s));
+  const updateStatLabel = (idx, label) => setStats(prev => prev.map((s, i) => {
+    if (i !== idx) return s;
+    const baseKey = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || s.key;
+    // ensure uniqueness among other stats
+    const isDupe = prev.some((other, j) => j !== i && other.key === baseKey);
+    return { ...s, label, key: isDupe ? `${baseKey}_${idx}` : baseKey };
+  }));
 
   const handleSaveStats = async () => {
     setSavingStats(true);
@@ -770,14 +985,12 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
       setStats(clean);
       setSavedStats(true);
       setTimeout(() => setSavedStats(false), 2500);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast("Failed to save stat categories."); }
     finally { setSavingStats(false); }
   };
 
   return (
     <div className="tab-body">
-
-      {/* League info */}
       <div className="settings-section card">
         <h4 className="settings-section-title">League Info</h4>
         <div className="settings-form">
@@ -793,6 +1006,22 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
             <label className="form-label">City</label>
             <input className="form-input" value={form.city} onChange={e => setF("city", e.target.value)} />
           </div>
+          <div className="form-group">
+            <label className="form-label">League Color</label>
+            <div className="settings-color-row">
+              <input
+                type="color"
+                className="color-picker-sm"
+                value={form.color}
+                onChange={e => setF("color", e.target.value)}
+              />
+              <span className="settings-color-preview" style={{ background: form.color }} />
+              <span style={{ fontSize: "0.82rem", color: "var(--c-text2)", fontFamily: "monospace" }}>
+                {form.color.toUpperCase()}
+              </span>
+              <span className="settings-color-hint">Used for the public page accent, badges, and highlights</span>
+            </div>
+          </div>
           <div className="settings-save-row">
             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
@@ -801,12 +1030,10 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
         </div>
       </div>
 
-      {/* Stat categories */}
       <div className="settings-section card">
         <h4 className="settings-section-title">Stat Categories</h4>
         <p className="settings-hint">
-          These are the stats tracked per player per game. They show up when you enter a score.
-          You can add, rename, or remove any category.
+          These are the stats tracked per player per game. They show up when you enter a score and on each player's public profile.
         </p>
         <div className="stat-list">
           {stats.map((stat, idx) => (
@@ -815,7 +1042,7 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
                 className="form-input stat-input"
                 value={stat.label}
                 onChange={e => updateStatLabel(idx, e.target.value)}
-                placeholder="Stat name (e.g. Goals, Assists)"
+                placeholder="Stat name (e.g. Goals, Assists, Yellow Cards)"
               />
               <button className="stat-remove-btn" onClick={() => removeStat(idx)}>Remove</button>
             </div>
@@ -829,7 +1056,6 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
         </div>
       </div>
 
-      {/* Public link */}
       <div className="settings-section card">
         <h4 className="settings-section-title">Public Link</h4>
         <p className="settings-hint">Share this with players and fans. No account needed to view.</p>
@@ -839,7 +1065,6 @@ function SettingsTab({ league, setLeague, leagueId, navigate, publicUrl }) {
         </div>
       </div>
 
-      {/* Danger zone */}
       <div className="settings-section card danger-zone">
         <h4 className="settings-section-title danger-title">Danger Zone</h4>
         <div className="danger-row">
