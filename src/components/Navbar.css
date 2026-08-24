@@ -38,7 +38,24 @@
   gap: 8px;
 }
 
-@media (max-width: 480px) {
-  .navbar-actions .btn-ghost { display: none; }
+@media (max-width: 768px) {
+  .navbar-inner { height: 56px; }
   .logo-text { font-size: 1.15rem; }
+
+  /* Hide ghost/text links — keep only the primary action button */
+  .navbar-actions .btn-ghost { display: none; }
+
+  /* Shrink remaining buttons */
+  .navbar-actions .btn {
+    padding: 7px 14px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-text { font-size: 1rem; }
+  .navbar-actions .btn {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
 }

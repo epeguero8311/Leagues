@@ -205,5 +205,11 @@ select.form-input option { background: #fff; }
 
 @media (max-width: 768px) {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .container { padding: 0 20px; }
+  .container { padding: 0 16px; }
+  body { font-size: 14px; }
+  .card { padding: 18px; }
+}
+
+@media (max-width: 480px) {
+  .container { padding: 0 12px; }
 }

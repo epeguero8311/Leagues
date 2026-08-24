@@ -1,4 +1,4 @@
-# LeagueHub
+# Tablafut
 
 A full-featured sports league management platform built with React + Firebase.
 

@@ -253,8 +253,8 @@ export default function HomePage() {
 
       <footer className="footer">
         <div className="container footer-inner">
-          <span className="footer-logo">League<span>Hub</span></span>
-          <p className="footer-copy">© 2026 LeagueHub. All rights reserved.</p>
+          <span className="footer-logo">Tabla<span>fut</span></span>
+          <p className="footer-copy">© 2026 Tablafut. All rights reserved.</p>
         </div>
       </footer>
     </div>

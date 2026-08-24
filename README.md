@@ -1,4 +1,4 @@
-# Leagues
+# Tablafut
 
 # Sports League Management Platform
 

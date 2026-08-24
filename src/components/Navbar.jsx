@@ -15,7 +15,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner container">
         <Link to="/" className="navbar-logo">
-          <span className="logo-text">League<span>Hub</span></span>
+          <span className="logo-text">Tabla<span>fut</span></span>
         </Link>
         <div className="navbar-actions">
           {user ? (

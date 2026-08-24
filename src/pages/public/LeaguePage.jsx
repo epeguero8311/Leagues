@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase/config";
@@ -63,25 +63,23 @@ export default function LeaguePage() {
     <div className="lp-page">
       <Navbar />
 
-      {/* League header */}
+      {/* League header — accent color only on the top border stripe */}
       <div className="lp-header" style={{ borderTop: `4px solid ${accentColor}` }}>
         <div className="container">
 
           {/* Top row */}
           <div className="lp-header-top">
-            <div className="lp-logo" style={{ background: accentColor + "18", border: `2px solid ${accentColor}33` }}>
+            <div className="lp-logo">
               {league.logoUrl
                 ? <img src={league.logoUrl} alt={league.name} />
-                : <span style={{ color: accentColor, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.05em" }}>
+                : <span className="lp-logo-abbr">
                     {SPORT_ABBR[league.sport] || "LGE"}
                   </span>
               }
             </div>
 
             <div className="lp-header-info">
-              <div className="lp-sport-badge" style={{ color: accentColor, background: accentColor + "14", border: `1px solid ${accentColor}30` }}>
-                {league.sport}
-              </div>
+              <div className="lp-sport-badge">{league.sport}</div>
               <h1 className="lp-league-name">{league.name}</h1>
               <p className="lp-league-location">
                 {league.city && `${league.city}, `}{league.state}
@@ -93,9 +91,9 @@ export default function LeaguePage() {
                 <button
                   className="lp-desc-toggle"
                   onClick={() => setDescOpen(o => !o)}
-                  style={{ color: accentColor, borderColor: accentColor + "44" }}
                 >
-                  {descOpen ? "Hide info ▲" : "About this league ▼"}
+                  {descOpen ? "Hide info" : "About this league"}
+                  <span className="lp-toggle-arrow">{descOpen ? "▲" : "▼"}</span>
                 </button>
               )}
             </div>
@@ -132,7 +130,6 @@ export default function LeaguePage() {
               <button
                 key={t}
                 className={`lp-tab ${tab === t ? "active" : ""}`}
-                style={tab === t ? { color: accentColor, borderBottomColor: accentColor } : {}}
                 onClick={() => setTab(t)}
               >
                 {t}
@@ -144,15 +141,15 @@ export default function LeaguePage() {
 
       {/* Tab content */}
       <div className="container lp-content">
-        {tab === "Standings"   && <StandingsTab   teams={teams} games={games} accentColor={accentColor} />}
-        {tab === "Schedule"    && <ScheduleTab     teams={teams} games={games} />}
-        {tab === "Leaderboard" && <LeaderboardTab  players={players} teams={teams} games={games} league={league} accentColor={accentColor} />}
-        {tab === "Players"     && <PlayersTab      players={players} teams={teams} games={games} league={league} accentColor={accentColor} />}
+        {tab === "Standings"   && <StandingsTab   teams={teams} games={games} />}
+        {tab === "Schedule"    && <ScheduleTab     teams={teams} games={games} players={players} league={league} />}
+        {tab === "Leaderboard" && <LeaderboardTab  players={players} teams={teams} games={games} league={league} />}
+        {tab === "Players"     && <PlayersTab      players={players} teams={teams} games={games} league={league} />}
       </div>
 
       <footer className="lp-footer">
         <div className="container lp-footer-inner">
-          <Link to="/" className="lp-footer-brand">LeagueHub</Link>
+          <Link to="/" className="lp-footer-brand">Tablafut</Link>
           <span className="lp-footer-copy">Public league page · No account needed</span>
         </div>
       </footer>
@@ -163,7 +160,7 @@ export default function LeaguePage() {
 /* ═══════════════════════════════════════
    STANDINGS TAB
 ═══════════════════════════════════════ */
-function StandingsTab({ teams, games, accentColor }) {
+function StandingsTab({ teams, games }) {
   const completed = games.filter(g => g.status === "completed");
 
   const standings = teams.map(team => {
@@ -211,13 +208,12 @@ function StandingsTab({ teams, games, accentColor }) {
             {standings.map((team, i) => (
               <tr key={team.id} className={i === 0 && team.played > 0 ? "lp-row-top" : ""}>
                 <td className="lp-td-rank">
-                  <span className="lp-rank-num" style={i === 0 && team.played > 0 ? { background: accentColor, color: "#fff" } : {}}>
+                  <span className="lp-rank-num" style={i === 0 && team.played > 0 ? { background: "var(--jet)", color: "#fff" } : {}}>
                     {i + 1}
                   </span>
                 </td>
                 <td>
                   <div className="lp-team-cell">
-                    <span className="lp-team-dot" style={{ background: team.color }} />
                     <span className="lp-team-name-text">{team.name}</span>
                   </div>
                 </td>
@@ -251,9 +247,21 @@ function StandingsTab({ teams, games, accentColor }) {
 /* ═══════════════════════════════════════
    SCHEDULE TAB
 ═══════════════════════════════════════ */
-function ScheduleTab({ teams, games }) {
+function ScheduleTab({ teams, games, players, league }) {
   const [search, setSearch] = useState("");
+  const [selectedGame, setSelectedGame] = useState(null);
   const getTeam = tid => teams.find(t => t.id === tid);
+
+  // Aggregate stats per player from completed games
+  const statTotals = {};
+  games.filter(g => g.status === "completed" && g.playerStats).forEach(game => {
+    Object.entries(game.playerStats).forEach(([pid, stats]) => {
+      if (!statTotals[pid]) statTotals[pid] = {};
+      Object.entries(stats).forEach(([k, v]) => {
+        statTotals[pid][k] = (statTotals[pid][k] || 0) + (Number(v) || 0);
+      });
+    });
+  });
 
   const filterGames = (list) => {
     if (!search.trim()) return list;
@@ -275,9 +283,30 @@ function ScheduleTab({ teams, games }) {
     const away = getTeam(game.awayTeamId);
     const dateStr = game.date ? new Date(game.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
     const timeStr = game.time ? new Date("2000-01-01T" + game.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+    const isCompleted = game.status === "completed";
+
+    // Detect yellow/red card stats
+    const gameStats = game.playerStats || {};
+    const statCategories = league.statCategories || [];
+    const yellowKey = statCategories.find(s => s.label.toLowerCase().includes("yellow"))?.key;
+    const redKey    = statCategories.find(s => s.label.toLowerCase().includes("red"))?.key;
+
+    let totalYellow = 0, totalRed = 0;
+    if (yellowKey || redKey) {
+      Object.values(gameStats).forEach(stats => {
+        if (yellowKey) totalYellow += Number(stats[yellowKey] || 0);
+        if (redKey)    totalRed    += Number(stats[redKey]    || 0);
+      });
+    }
 
     return (
-      <div className={`lp-game-card ${game.status === "completed" ? "lp-game-completed" : ""}`}>
+      <div
+        className={`lp-game-card ${isCompleted ? "lp-game-completed" : ""} lp-game-card-clickable`}
+        onClick={() => setSelectedGame({ game, home, away, dateStr, timeStr, totalYellow, totalRed, yellowKey, redKey, gameStats, statCategories })}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === "Enter" && setSelectedGame({ game, home, away, dateStr, timeStr, totalYellow, totalRed, yellowKey, redKey, gameStats, statCategories })}
+      >
         <div className="lp-game-datetime">
           <span className="lp-game-date">{dateStr}</span>
           {timeStr && <span className="lp-game-time">{timeStr}</span>}
@@ -285,10 +314,9 @@ function ScheduleTab({ teams, games }) {
         </div>
         <div className="lp-game-matchup">
           <div className="lp-game-team lp-game-team-home">
-            <span className="lp-game-dot" style={{ background: home?.color }} />
             <span className="lp-game-teamname">{home?.name || "TBD"}</span>
           </div>
-          {game.status === "completed"
+          {isCompleted
             ? <div className="lp-game-scorebox">
                 <span className="lp-game-score-num">{game.homeScore}</span>
                 <span className="lp-game-score-sep">–</span>
@@ -298,27 +326,41 @@ function ScheduleTab({ teams, games }) {
           }
           <div className="lp-game-team lp-game-team-away">
             <span className="lp-game-teamname">{away?.name || "TBD"}</span>
-            <span className="lp-game-dot" style={{ background: away?.color }} />
           </div>
         </div>
-        {game.status === "completed" && (() => {
+
+        {/* Card chips row */}
+        {isCompleted && (totalYellow > 0 || totalRed > 0) && (
+          <div className="lp-game-cards-row">
+            {totalYellow > 0 && (
+              <span className="lp-card-chip lp-card-yellow">
+                <span className="lp-card-rect" />
+                {totalYellow}
+              </span>
+            )}
+            {totalRed > 0 && (
+              <span className="lp-card-chip lp-card-red">
+                <span className="lp-card-rect" />
+                {totalRed}
+              </span>
+            )}
+          </div>
+        )}
+
+        {isCompleted && (() => {
           const hS = game.homeScore, aS = game.awayScore;
           const winner = hS > aS ? home : aS > hS ? away : null;
           return (
-            <>
+            <div className="lp-game-result">
               {winner
-                ? <div className="lp-game-result"><span className="lp-game-winner">{winner.name} won</span></div>
-                : <div className="lp-game-result"><span className="lp-game-draw">Draw</span></div>
+                ? <span className="lp-game-winner">{winner.name} won</span>
+                : <span className="lp-game-draw">Draw</span>
               }
-              {game.gameNotes && (
-                <div className="lp-game-notes">
-                  <span className="lp-game-notes-icon">📋</span>
-                  <p className="lp-game-notes-text">{game.gameNotes}</p>
-                </div>
-              )}
-            </>
+            </div>
           );
         })()}
+
+        <span className="lp-game-view-details">View details</span>
       </div>
     );
   };
@@ -326,14 +368,16 @@ function ScheduleTab({ teams, games }) {
   return (
     <div className="lp-section lp-schedule">
       <div className="lp-search-wrap">
-        <span className="lp-search-icon">🔍</span>
+        <span className="lp-search-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+        </span>
         <input
           className="lp-search-bar"
           placeholder="Search by team or location..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>✕</button>}
+        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>&#x2715;</button>}
       </div>
       {search && upcoming.length === 0 && completed.length === 0 && (
         <p style={{ color: "var(--c-text3)", fontSize: "0.875rem" }}>No games match "{search}".</p>
@@ -354,6 +398,142 @@ function ScheduleTab({ teams, games }) {
           </div>
         </div>
       )}
+
+      {/* Game Modal */}
+      {selectedGame && (
+        <GameModal
+          data={selectedGame}
+          players={players}
+          onClose={() => setSelectedGame(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════
+   GAME MODAL
+═══════════════════════════════════════ */
+function GameModal({ data, players, onClose }) {
+  const { game, home, away, dateStr, timeStr, yellowKey, redKey, gameStats, statCategories } = data;
+  const isCompleted = game.status === "completed";
+
+  const getPlayer = pid => players.find(p => p.id === pid);
+
+  const hS = game.homeScore, aS = game.awayScore;
+  const winner = isCompleted ? (hS > aS ? home : aS > hS ? away : null) : null;
+
+  // Build per-player card events for display
+  const cardEvents = [];
+  if (isCompleted && (yellowKey || redKey)) {
+    Object.entries(gameStats).forEach(([pid, stats]) => {
+      const player = getPlayer(pid);
+      if (!player) return;
+      const yellows = Number(stats[yellowKey] || 0);
+      const reds    = Number(stats[redKey]    || 0);
+      for (let i = 0; i < yellows; i++) cardEvents.push({ player, type: "yellow" });
+      for (let i = 0; i < reds;    i++) cardEvents.push({ player, type: "red" });
+    });
+  }
+
+  // Close on backdrop click
+  const handleBackdrop = e => { if (e.target === e.currentTarget) onClose(); };
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div className="lp-modal-backdrop" onClick={handleBackdrop}>
+      <div className="lp-modal" role="dialog" aria-modal="true">
+
+        {/* Close button */}
+        <button className="lp-modal-close" onClick={onClose} aria-label="Close">&#x2715;</button>
+
+        {/* Status label */}
+        <p className="lp-modal-status">{isCompleted ? "Full Time" : "Upcoming"}</p>
+
+        {/* Scoreline */}
+        <div className="lp-modal-scoreline">
+          <div className="lp-modal-team">
+            <span className="lp-modal-team-name">{home?.name || "TBD"}</span>
+          </div>
+
+          <div className="lp-modal-score">
+            {isCompleted
+              ? <><span className={hS > aS ? "lp-modal-score-win" : ""}>{hS}</span>
+                  <span className="lp-modal-score-sep">–</span>
+                  <span className={aS > hS ? "lp-modal-score-win" : ""}>{aS}</span></>
+              : <span className="lp-modal-score-vs">vs</span>
+            }
+          </div>
+
+          <div className="lp-modal-team lp-modal-team-right">
+            <span className="lp-modal-team-name">{away?.name || "TBD"}</span>
+          </div>
+        </div>
+
+        {/* Result line */}
+        {isCompleted && (
+          <p className="lp-modal-result">
+            {winner ? <><strong>{winner.name}</strong> won</> : "Draw"}
+          </p>
+        )}
+
+        <div className="lp-modal-divider" />
+
+        {/* Meta info */}
+        <div className="lp-modal-meta">
+          {dateStr && (
+            <div className="lp-modal-meta-row">
+              <span className="lp-modal-meta-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2.5" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1 5.5h12M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </span>
+              <span>{dateStr}{timeStr && ` · ${timeStr}`}</span>
+            </div>
+          )}
+          {game.location && (
+            <div className="lp-modal-meta-row">
+              <span className="lp-modal-meta-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5C4.79 1.5 3 3.29 3 5.5c0 3 4 7 4 7s4-4 4-7c0-2.21-1.79-3.5-4-3.5z" stroke="currentColor" strokeWidth="1.3"/><circle cx="7" cy="5.5" r="1.2" stroke="currentColor" strokeWidth="1.2"/></svg>
+              </span>
+              <span>{game.location}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Card events */}
+        {cardEvents.length > 0 && (
+          <>
+            <div className="lp-modal-divider" />
+            <p className="lp-modal-section-label">Cards</p>
+            <div className="lp-modal-cards-list">
+              {cardEvents.map((ev, i) => (
+                <div key={i} className="lp-modal-card-row">
+                  <span className={`lp-card-chip lp-card-${ev.type}`}>
+                    <span className="lp-card-rect" />
+                  </span>
+                  <span className="lp-modal-card-player">
+                    {ev.player.firstName} {ev.player.lastName}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Game notes */}
+        {game.gameNotes && (
+          <>
+            <div className="lp-modal-divider" />
+            <p className="lp-modal-section-label">Match Notes</p>
+            <p className="lp-modal-notes">{game.gameNotes}</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -361,7 +541,7 @@ function ScheduleTab({ teams, games }) {
 /* ═══════════════════════════════════════
    LEADERBOARD TAB
 ═══════════════════════════════════════ */
-function LeaderboardTab({ players, teams, games, league, accentColor }) {
+function LeaderboardTab({ players, teams, games, league }) {
   const statCategories = league.statCategories || [];
   const [activeStat, setActiveStat] = useState(statCategories[0]?.key || "");
 
@@ -392,7 +572,6 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
           <button
             key={s.key}
             className={`lp-stat-tab ${activeStat === s.key ? "active" : ""}`}
-            style={activeStat === s.key ? { background: accentColor, borderColor: accentColor, color: "#fff" } : {}}
             onClick={() => setActiveStat(s.key)}
           >
             {s.label}
@@ -407,16 +586,9 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
           {ranked.map((player, i) => {
             const team = getTeam(player.teamId);
             return (
-              <div key={player.id} className={`lp-lb-row ${i < 3 ? "lp-lb-top" : ""}`}>
+              <div key={player.id} className="lp-lb-row">
                 <div className="lp-lb-rank">
-                  {i === 0
-                    ? <span className="lp-lb-medal gold">1</span>
-                    : i === 1
-                    ? <span className="lp-lb-medal silver">2</span>
-                    : i === 2
-                    ? <span className="lp-lb-medal bronze">3</span>
-                    : <span className="lp-lb-rank-num">{i + 1}</span>
-                  }
+                  <span className="lp-lb-rank-num">{i + 1}</span>
                 </div>
                 <div className="lp-lb-avatar">
                   {player.photoUrl
@@ -428,13 +600,12 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
                   <p className="lp-lb-name">{player.firstName} {player.lastName}</p>
                   {team && (
                     <p className="lp-lb-team">
-                      <span className="lp-lb-team-dot" style={{ background: team.color }} />
                       {team.name}
                     </p>
                   )}
                 </div>
                 {player.position && <span className="lp-lb-pos">{player.position}</span>}
-                <div className="lp-lb-value" style={{ color: accentColor }}>
+                <div className="lp-lb-value">
                   <span className="lp-lb-num">{player.total}</span>
                   <span className="lp-lb-label">{statCategories.find(s => s.key === activeStat)?.label}</span>
                 </div>
@@ -450,14 +621,13 @@ function LeaderboardTab({ players, teams, games, league, accentColor }) {
 /* ═══════════════════════════════════════
    PLAYERS TAB
 ═══════════════════════════════════════ */
-function PlayersTab({ players, teams, games, league, accentColor }) {
+function PlayersTab({ players, teams, games, league }) {
   const [filter, setFilter]     = useState("all");
   const [expanded, setExpanded] = useState(null);
   const [search, setSearch]     = useState("");
 
-  const getTeam  = tid => teams.find(t => t.id === tid);
+  const getTeam = tid => teams.find(t => t.id === tid);
 
-  // Aggregate stats per player from completed games
   const statTotals = {};
   games.filter(g => g.status === "completed" && g.playerStats).forEach(game => {
     Object.entries(game.playerStats).forEach(([pid, stats]) => {
@@ -483,12 +653,10 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
 
   return (
     <div className="lp-section">
-      {/* Team filter */}
       {teams.length > 1 && (
         <div className="lp-filter-row">
           <button
             className={`lp-filter-btn ${filter === "all" ? "active" : ""}`}
-            style={filter === "all" ? { background: accentColor, borderColor: accentColor, color: "#fff" } : {}}
             onClick={() => setFilter("all")}
           >
             All Teams
@@ -497,10 +665,8 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
             <button
               key={t.id}
               className={`lp-filter-btn ${filter === t.id ? "active" : ""}`}
-              style={filter === t.id ? { background: t.color, borderColor: t.color, color: "#fff" } : {}}
               onClick={() => setFilter(t.id)}
             >
-              <span className="lp-filter-dot" style={{ background: filter === t.id ? "#fff" : t.color }} />
               {t.name}
             </button>
           ))}
@@ -508,14 +674,16 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
       )}
 
       <div className="lp-search-wrap">
-        <span className="lp-search-icon">🔍</span>
+        <span className="lp-search-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+        </span>
         <input
           className="lp-search-bar"
           placeholder="Search players by name, team, or position..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>✕</button>}
+        {search && <button className="lp-search-clear" onClick={() => setSearch("")}>&#x2715;</button>}
       </div>
 
       <div className="lp-players-grid">
@@ -531,7 +699,6 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
 
           return (
             <div key={player.id} className={`lp-player-card ${isOpen ? "open" : ""}`}>
-              {/* Card header — always visible */}
               <div className="lp-player-card-top" onClick={() => setExpanded(isOpen ? null : player.id)}>
                 <div className="lp-player-avatar">
                   {player.photoUrl
@@ -543,39 +710,30 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
                   <p className="lp-player-name">{player.firstName} {player.lastName}</p>
                   <div className="lp-player-meta-row">
                     {team && (
-                      <span className="lp-player-team" style={{ color: team.color }}>
-                        <span className="lp-team-dot-sm" style={{ background: team.color }} />
+                      <span className="lp-player-team">
                         {team.name}
                       </span>
                     )}
                     {player.position  && <span className="lp-player-pos">{player.position}</span>}
                     {player.jerseyNumber && <span className="lp-player-jersey">#{player.jerseyNumber}</span>}
                   </div>
-
-
                 </div>
                 <button className="lp-expand-btn" aria-label={isOpen ? "Collapse" : "Expand"}>
                   {isOpen ? "▲" : "▼"}
                 </button>
               </div>
 
-              {/* Expanded detail */}
               {isOpen && (
                 <div className="lp-player-detail">
-
-                  {/* Bio */}
                   {player.bio && <p className="lp-player-bio">{player.bio}</p>}
 
-                  {/* Season Stats */}
                   {hasStats && (
                     <div className="lp-player-stats">
                       <p className="lp-player-stats-title">Season Stats</p>
                       <div className="lp-player-stats-grid">
                         {statCategories.map(s => (
                           <div key={s.key} className="lp-player-stat-item">
-                            <span className="lp-player-stat-val" style={{ color: accentColor }}>
-                              {stats[s.key] || 0}
-                            </span>
+                            <span className="lp-player-stat-val">{stats[s.key] || 0}</span>
                             <span className="lp-player-stat-label">{s.label}</span>
                           </div>
                         ))}
@@ -583,7 +741,6 @@ function PlayersTab({ players, teams, games, league, accentColor }) {
                     </div>
                   )}
 
-                  {/* Notes */}
                   {notes.length > 0 && (
                     <div className="lp-player-notes">
                       <p className="lp-player-stats-title">Notes</p>
