@@ -812,7 +812,7 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
 
           <div className="score-inline-scores">
             <div className="score-inline-block">
-              <label className="form-label">{home?.name}</label>
+              <label className="form-label">{home?.name || "Home"}</label>
               <input
                 className={`form-input score-inline-input${attempted && homeScore === "" ? " error" : ""}`}
                 inputMode="numeric"
@@ -823,7 +823,7 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
             </div>
             <span className="score-inline-dash">–</span>
             <div className="score-inline-block">
-              <label className="form-label">{away?.name}</label>
+              <label className="form-label">{away?.name || "Away"}</label>
               <input
                 className={`form-input score-inline-input${attempted && awayScore === "" ? " error" : ""}`}
                 inputMode="numeric"
@@ -843,10 +843,15 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
               {!loadedPlayers ? (
                 <div className="score-inline-loading"><div className="spinner" /></div>
               ) : (
-                [{ label: home?.name, players: homePlayers }, { label: away?.name, players: awayPlayers }].map(({ label, players }) =>
-                  players.length > 0 && (
-                    <div key={label} className="score-inline-team">
+                [
+                  { side: "home", label: home?.name || "Home", players: homePlayers },
+                  { side: "away", label: away?.name || "Away", players: awayPlayers },
+                ].map(({ side, label, players }) => (
+                    <div key={side} className="score-inline-team">
                       <p className="score-inline-team-label">{label}</p>
+                      {players.length === 0 ? (
+                        <p className="score-inline-team-empty">No players on this roster yet. Add players in the Players tab to track their stats.</p>
+                      ) : (
                       <div className="score-stats-table-wrap">
                         <table className="score-stats-table">
                           <thead>
@@ -883,6 +888,7 @@ function GameRowWithScore({ game, getTeam, league, leagueId, isScoreOpen, onTogg
                           </tbody>
                         </table>
                       </div>
+                      )}
                     </div>
                   )
                 )
